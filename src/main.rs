@@ -1,10 +1,7 @@
 use std::f32::consts::PI;
 
 use bevy::{
-    input::{
-        keyboard::KeyboardInput,
-        mouse::{MouseMotion, MouseWheel},
-    },
+    input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
     window::PrimaryWindow,
 };
@@ -176,11 +173,9 @@ fn keep_upright_impl(ent: &mut Transform, normal: Vec2) {
     let angle = f32::atan2(normal.y, normal.x);
     let mut angle = angle + PI / 2.0;
 
-    println!("{angle}");
     if angle.abs() < 0.01 {
         angle = 0.0;
     }
-    println!("{angle}");
 
     let new_angle = Quat::from_rotation_z(angle);
 
@@ -244,25 +239,49 @@ fn player_movement(
 }
 
 fn debug(
-    mut player: Query<(&mut Transform, &mut Friction), With<Player>>,
+    mut player: Query<&mut Transform, With<Player>>,
+    mut last_click_pos: Local<Option<Vec2>>,
     mouse: Res<Input<MouseButton>>,
     coords: Res<MyWorldCoords>,
+    keys: Res<Input<KeyCode>>,
+    mut commands: Commands,
 ) {
-    let (mut transform, mut fric) = match player.iter_mut().next() {
+    let coords = coords.0;
+
+    if !keys.pressed(KeyCode::ControlLeft) {
+        return;
+    }
+
+    // Make geo
+    if mouse.just_pressed(MouseButton::Left) {
+        match *last_click_pos {
+            Some(pos) => {
+                let center = (pos + coords) / 2.0;
+                let len = pos.distance(coords);
+
+                let mut cube = make_cube(center.x, center.y, len, 10.0, 50.0);
+
+                let diff = coords - pos;
+                let rotation = f32::atan2(diff.y, diff.x);
+
+                cube.0.transform.rotate_z(rotation);
+
+                commands.spawn(cube);
+
+                *last_click_pos = None;
+            }
+            None => *last_click_pos = Some(coords),
+        }
+    }
+
+    let mut transform = match player.iter_mut().next() {
         Some(x) => x,
         None => return,
     };
 
+    // Teleport
     if mouse.just_pressed(MouseButton::Right) {
-        transform.translation = Vec3::new(coords.0.x, coords.0.y, transform.translation.z);
-    }
-
-    if mouse.pressed(MouseButton::Left) {
-        fric.static_coefficient = 0.;
-        fric.dynamic_coefficient = 0.;
-    } else {
-        fric.static_coefficient = 1.;
-        fric.dynamic_coefficient = 1.;
+        transform.translation = Vec3::new(coords.x, coords.y, transform.translation.z);
     }
 }
 
