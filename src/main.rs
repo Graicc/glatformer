@@ -203,22 +203,37 @@ fn keep_upright(
 }
 
 fn player_movement(
-    mut player: Query<(&mut Transform, &mut LinearVelocity), With<Player>>,
+    mut player: Query<(&mut Transform, &mut Friction, &mut LinearVelocity), With<Player>>,
     keys: Res<Input<KeyCode>>,
 ) {
-    let (_, mut velocity) = match player.iter_mut().next() {
+    let (_, mut friction, mut velocity) = match player.iter_mut().next() {
         Some(x) => x,
         None => return,
     };
 
+    // Keyboard input
     let mut input = Vec2::ZERO;
-
     if keys.pressed(KeyCode::A) || keys.pressed(KeyCode::Left) {
         input -= Vec2::X;
     }
-
     if keys.pressed(KeyCode::D) || keys.pressed(KeyCode::Right) {
         input += Vec2::X;
+    }
+
+    // Jump
+    // TODO: Detect ground
+    if keys.just_pressed(KeyCode::Space) {
+        **velocity += Vec2::Y * 600.0;
+    }
+
+    // Slide
+    // TODO: put on timer
+    if keys.pressed(KeyCode::ShiftLeft) {
+        friction.static_coefficient = 0.;
+        friction.dynamic_coefficient = 0.;
+    } else {
+        friction.static_coefficient = 1.;
+        friction.dynamic_coefficient = 1.;
     }
 
     let accel = 100.0;
