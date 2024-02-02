@@ -17,6 +17,7 @@ fn main() {
         .add_systems(Startup, setup)
         // .add_systems(Update, sprite_movement)
         .add_systems(Update, player_movement)
+        .add_systems(Update, player_hook)
         .add_systems(Update, debug)
         .add_systems(Update, pan_camera)
         .add_systems(Update, zoom_camera)
@@ -249,8 +250,55 @@ fn player_movement(
         **velocity += delta_v;
         velocity.x = velocity.x.clamp(-max_speed, max_speed);
     }
+}
 
-    println!("{}", velocity.x);
+fn player_hook(
+    mut player: Query<(Entity, &mut Transform), With<Player>>,
+    mouse: Res<Input<MouseButton>>,
+    coords: Res<MyWorldCoords>,
+    spatial_query: SpatialQuery,
+    mut current: Local<Option<(Entity, Entity)>>,
+    mut commands: Commands,
+) {
+    let (player, transform) = match player.iter_mut().next() {
+        Some(x) => x,
+        None => return,
+    };
+
+    match (*current, mouse.pressed(MouseButton::Right)) {
+        (None, true) => {
+            let coords = coords.0;
+            let pos = Vec2::new(transform.translation.x, transform.translation.y);
+
+            let dir = (coords - pos).normalize();
+
+            let filter = SpatialQueryFilter::new().without_entities([player]);
+
+            if let Some(hit) = spatial_query.cast_ray(pos, dir, 5000.0, true, filter) {
+                let hit_point = pos + (dir * hit.time_of_impact);
+
+                let hook = commands
+                    .spawn((
+                        RigidBody::Static,
+                        Position::from_xy(hit_point.x, hit_point.y),
+                    ))
+                    .id();
+
+                let rope = commands
+                    .spawn(DistanceJoint::new(player, hook).with_rest_length(hit.time_of_impact))
+                    .id();
+
+                *current = Some((hook, rope));
+            }
+        }
+        (Some((hook, rope)), false) => {
+            // despawn
+            commands.entity(rope).despawn();
+            commands.entity(hook).despawn();
+            *current = None;
+        }
+        _ => (),
+    }
 }
 
 fn debug(
