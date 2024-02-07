@@ -1,3 +1,5 @@
+mod player;
+
 use std::f32::consts::PI;
 
 use bevy::{
@@ -15,9 +17,10 @@ fn main() {
             PhysicsDebugPlugin::default(),
         ))
         .add_systems(Startup, setup)
-        // .add_systems(Update, sprite_movement)
-        .add_systems(Update, player_movement)
-        .add_systems(Update, player_hook)
+        .add_systems(Startup, player::setup)
+        .add_systems(Update, player::movement)
+        .add_systems(Update, player::hook)
+        .add_systems(Update, player::is_grounded)
         .add_systems(Update, debug)
         .add_systems(Update, pan_camera)
         .add_systems(Update, zoom_camera)
@@ -57,9 +60,6 @@ fn make_cube(
 }
 
 #[derive(Component, Default)]
-struct Player {}
-
-#[derive(Component, Default)]
 struct KeepUpright {}
 
 /// We will store the world position of the mouse cursor here.
@@ -70,28 +70,9 @@ struct MyWorldCoords(Vec2);
 #[derive(Component)]
 struct MainCamera;
 
-fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
+fn setup(mut commands: Commands) {
     commands.init_resource::<MyWorldCoords>();
     commands.spawn((Camera2dBundle::default(), MainCamera));
-
-    let ball_r = 50.;
-    commands.spawn((
-        SpriteBundle {
-            texture: asset_server.load("bevy_pixel_dark.png"),
-            transform: Transform::from_xyz(100., 100., 0.),
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(ball_r * 2., ball_r * 2.)),
-                ..default()
-            },
-            ..default()
-        },
-        Player::default(),
-        RigidBody::Dynamic,
-        Collider::ball(ball_r),
-        LockedAxes::ROTATION_LOCKED,
-        Friction::new(0.).with_combine_rule(CoefficientCombine::Multiply),
-        KeepUpright::default(),
-    ));
 
     commands.spawn(make_cube(0., 0., 100., 100., 0.));
     commands.spawn(make_cube(0., 0., 1000., 10., 50.));
@@ -203,106 +184,8 @@ fn keep_upright(
     }
 }
 
-fn player_movement(
-    mut player: Query<(&mut Transform, &mut Friction, &mut LinearVelocity), With<Player>>,
-    keys: Res<Input<KeyCode>>,
-) {
-    let (_, mut friction, mut velocity) = match player.iter_mut().next() {
-        Some(x) => x,
-        None => return,
-    };
-
-    // Keyboard input
-    let mut input = Vec2::ZERO;
-    if keys.pressed(KeyCode::A) || keys.pressed(KeyCode::Left) {
-        input -= Vec2::X;
-    }
-    if keys.pressed(KeyCode::D) || keys.pressed(KeyCode::Right) {
-        input += Vec2::X;
-    }
-
-    // Jump
-    // TODO: Detect ground
-    if keys.just_pressed(KeyCode::Space) {
-        **velocity += Vec2::Y * 600.0;
-    }
-
-    // Slide
-    // TODO: put on timer
-    if keys.pressed(KeyCode::ShiftLeft) {
-        friction.static_coefficient = 0.;
-        friction.dynamic_coefficient = 0.;
-    } else {
-        friction.static_coefficient = 1.;
-        friction.dynamic_coefficient = 1.;
-    }
-
-    let accel = 100.0;
-
-    let delta_v = input * accel;
-
-    let max_speed = 1000.0;
-
-    if input.dot(**velocity) < 0.0 {
-        // slow down
-        **velocity += delta_v;
-    } else if velocity.x.abs() < max_speed {
-        **velocity += delta_v;
-        velocity.x = velocity.x.clamp(-max_speed, max_speed);
-    }
-}
-
-fn player_hook(
-    mut player: Query<(Entity, &mut Transform), With<Player>>,
-    mouse: Res<Input<MouseButton>>,
-    coords: Res<MyWorldCoords>,
-    spatial_query: SpatialQuery,
-    mut current: Local<Option<(Entity, Entity)>>,
-    mut commands: Commands,
-) {
-    let (player, transform) = match player.iter_mut().next() {
-        Some(x) => x,
-        None => return,
-    };
-
-    match (*current, mouse.pressed(MouseButton::Right)) {
-        (None, true) => {
-            let coords = coords.0;
-            let pos = Vec2::new(transform.translation.x, transform.translation.y);
-
-            let dir = (coords - pos).normalize();
-
-            let filter = SpatialQueryFilter::new().without_entities([player]);
-
-            if let Some(hit) = spatial_query.cast_ray(pos, dir, 5000.0, true, filter) {
-                let hit_point = pos + (dir * hit.time_of_impact);
-
-                let hook = commands
-                    .spawn((
-                        RigidBody::Static,
-                        Position::from_xy(hit_point.x, hit_point.y),
-                    ))
-                    .id();
-
-                let rope = commands
-                    .spawn(DistanceJoint::new(player, hook).with_rest_length(hit.time_of_impact))
-                    .id();
-
-                *current = Some((hook, rope));
-            }
-        }
-        (Some((hook, rope)), false) => {
-            // despawn
-            commands.entity(rope).despawn();
-            commands.entity(hook).despawn();
-            *current = None;
-        }
-        _ => (),
-    }
-}
-
 fn debug(
-    mut player: Query<&mut Transform, With<Player>>,
+    mut player: Query<&mut Transform, With<player::Player>>,
     mut last_click_pos: Local<Option<Vec2>>,
     mouse: Res<Input<MouseButton>>,
     coords: Res<MyWorldCoords>,
