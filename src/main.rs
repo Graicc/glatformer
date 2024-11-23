@@ -2,17 +2,16 @@ mod player;
 
 use std::f32::consts::PI;
 
+use avian2d::{math::Vector, prelude::*};
 use bevy::{
+    asset::AssetMetaCheck,
     input::mouse::{MouseMotion, MouseWheel},
     prelude::*,
     window::PrimaryWindow,
-    asset::AssetMetaCheck
 };
-use bevy_xpbd_2d::{math::Vector, prelude::*};
 
 fn main() {
     App::new()
-        .insert_resource(AssetMetaCheck::Never)
         .add_plugins((
             DefaultPlugins
                 .set(ImagePlugin::default_nearest())
@@ -22,6 +21,10 @@ fn main() {
                         prevent_default_event_handling: false,
                         ..default()
                     }),
+                    ..default()
+                })
+                .set(AssetPlugin {
+                    meta_check: AssetMetaCheck::Never,
                     ..default()
                 }),
             PhysicsPlugins::default(),
@@ -39,10 +42,6 @@ fn main() {
         .add_systems(Update, world_cursor)
         .insert_resource(SubstepCount(50))
         .insert_resource(Gravity(Vector::NEG_Y * 1000.0))
-        .insert_resource(PhysicsDebugConfig {
-            contact_color: Some(Color::default()),
-            ..default()
-        })
         .run();
 }
 
@@ -64,7 +63,7 @@ fn make_cube(
             ..default()
         },
         RigidBody::Static,
-        Collider::cuboid(w, h),
+        Collider::rectangle(w, h),
         Friction::new(1.),
         Restitution::new(0.).with_combine_rule(CoefficientCombine::Multiply),
     )
@@ -97,7 +96,7 @@ fn setup(mut commands: Commands) {
 fn pan_camera(
     mut q_camera: Query<&mut Transform, With<MainCamera>>,
     mut motion_evr: EventReader<MouseMotion>,
-    buttons: Res<Input<MouseButton>>,
+    buttons: Res<ButtonInput<MouseButton>>,
 ) {
     if !buttons.pressed(MouseButton::Middle) {
         return;
@@ -198,9 +197,9 @@ fn keep_upright(
 fn debug(
     mut player: Query<&mut Transform, With<player::Player>>,
     mut last_click_pos: Local<Option<Vec2>>,
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     coords: Res<MyWorldCoords>,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
 ) {
     let coords = coords.0;

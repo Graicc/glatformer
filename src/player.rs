@@ -1,5 +1,5 @@
+use avian2d::prelude::*;
 use bevy::prelude::*;
-use bevy_xpbd_2d::prelude::*;
 
 use crate::{KeepUpright, MyWorldCoords};
 
@@ -25,7 +25,7 @@ pub(crate) fn setup(mut commands: Commands, asset_server: Res<AssetServer>) {
         },
         Player::default(),
         RigidBody::Dynamic,
-        Collider::ball(ball_r),
+        Collider::circle(ball_r),
         LockedAxes::ROTATION_LOCKED,
         Friction::new(0.).with_combine_rule(CoefficientCombine::Multiply),
         KeepUpright::default(),
@@ -56,7 +56,7 @@ pub(crate) fn is_grounded(
 
 pub(crate) fn movement(
     mut player: Query<(&mut Transform, &mut Friction, &mut LinearVelocity, &Player)>,
-    keys: Res<Input<KeyCode>>,
+    keys: Res<ButtonInput<KeyCode>>,
 ) {
     let (_, mut friction, mut velocity, player) = match player.iter_mut().next() {
         Some(x) => x,
@@ -65,10 +65,10 @@ pub(crate) fn movement(
 
     // Keyboard input
     let mut input = Vec2::ZERO;
-    if keys.pressed(KeyCode::A) || keys.pressed(KeyCode::Left) {
+    if keys.pressed(KeyCode::KeyA) || keys.pressed(KeyCode::ArrowLeft) {
         input -= Vec2::X;
     }
-    if keys.pressed(KeyCode::D) || keys.pressed(KeyCode::Right) {
+    if keys.pressed(KeyCode::KeyD) || keys.pressed(KeyCode::ArrowRight) {
         input += Vec2::X;
     }
 
@@ -105,7 +105,7 @@ pub(crate) fn movement(
 
 pub(crate) fn hook(
     mut player: Query<(Entity, &Transform), With<Player>>,
-    mouse: Res<Input<MouseButton>>,
+    mouse: Res<ButtonInput<MouseButton>>,
     coords: Res<MyWorldCoords>,
     spatial_query: SpatialQuery,
     mut current: Local<Option<(Entity, Entity)>>,
@@ -123,9 +123,11 @@ pub(crate) fn hook(
 
             let dir = (coords - pos).normalize();
 
-            let filter = SpatialQueryFilter::new().without_entities([player]);
+            let filter = SpatialQueryFilter::default().with_excluded_entities([player]);
 
-            if let Some(hit) = spatial_query.cast_ray(pos, dir, 5000.0, true, filter) {
+            if let Some(hit) =
+                spatial_query.cast_ray(pos, Dir2::try_from(dir).unwrap(), 5000.0, true, filter)
+            {
                 let hit_point = pos + (dir * hit.time_of_impact);
 
                 let hook = commands
@@ -152,11 +154,11 @@ pub(crate) fn hook(
     }
 }
 
-pub(crate) fn bomb(
-    mut player: Query<(Entity, &Transform), With<Player>>,
-    mut bombs: Query<With<Bomb>>,
-    mouse: Res<Input<MouseButton>>,
-    coords: Res<MyWorldCoords>,
-    mut commands: Commands,
-) {
-}
+// pub(crate) fn bomb(
+//     mut player: Query<(Entity, &Transform), With<Player>>,
+//     mut bombs: Query<With<Bomb>>,
+//     mouse: Res<Input<MouseButton>>,
+//     coords: Res<MyWorldCoords>,
+//     mut commands: Commands,
+// ) {
+// }
